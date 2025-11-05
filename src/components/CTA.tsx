@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const CTA = () => {
   return (
@@ -25,11 +26,14 @@ const CTA = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
             <Button 
+              asChild
               size="lg"
               className="gap-2 bg-gradient-to-r from-primary via-accent to-secondary hover:shadow-glow-secondary transition-all duration-300 group text-lg px-8"
             >
-              Schedule a Demo
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <Link to="/app">
+                Try IntelliAgent Now
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
             </Button>
             <Button 
               size="lg"
