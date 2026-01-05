@@ -263,37 +263,70 @@ export const AGPInterceptModal = ({
   );
 };
 
-// MCP Config Modal
-interface MCPConfigModalProps extends ModalProps {
-  onSave: (config: { resources: string[]; tools: string[] }) => void;
-  initialResources?: string[];
-  initialTools?: string[];
+// MCP Marketplace Modal
+interface MCPItem {
+  id: string;
+  name: string;
+  description: string;
+  category: "data" | "tools" | "integrations" | "ai";
+  icon: string;
+  rating: number;
+  downloads: string;
+  installed: boolean;
+  featured?: boolean;
+  author: string;
 }
 
-export const MCPConfigModal = ({ 
+interface MCPMarketplaceModalProps extends ModalProps {
+  onInstall: (itemId: string) => void;
+}
+
+const mcpItems: MCPItem[] = [
+  { id: "1", name: "PostgreSQL Connector", description: "Direct database access with read/write capabilities", category: "data", icon: "🗄️", rating: 4.9, downloads: "125K", installed: false, featured: true, author: "Supabase" },
+  { id: "2", name: "Slack Integration", description: "Send messages and read channels in real-time", category: "integrations", icon: "💬", rating: 4.7, downloads: "89K", installed: true, author: "Slack" },
+  { id: "3", name: "GitHub Actions", description: "Trigger workflows and manage repositories", category: "tools", icon: "🐙", rating: 4.8, downloads: "156K", installed: false, featured: true, author: "GitHub" },
+  { id: "4", name: "OpenAI GPT-4", description: "Advanced language model for text generation", category: "ai", icon: "🤖", rating: 4.9, downloads: "234K", installed: true, author: "OpenAI" },
+  { id: "5", name: "DALL-E 3", description: "Generate images from text descriptions", category: "ai", icon: "🎨", rating: 4.6, downloads: "67K", installed: false, author: "OpenAI" },
+  { id: "6", name: "Zapier Hooks", description: "Connect to 5000+ apps via webhooks", category: "integrations", icon: "⚡", rating: 4.5, downloads: "45K", installed: false, author: "Zapier" },
+  { id: "7", name: "REST API Builder", description: "Create and manage custom API endpoints", category: "tools", icon: "🌐", rating: 4.7, downloads: "78K", installed: false, author: "Postman" },
+  { id: "8", name: "Vector Store", description: "Semantic search and embeddings storage", category: "data", icon: "📊", rating: 4.8, downloads: "92K", installed: false, featured: true, author: "Pinecone" },
+  { id: "9", name: "Stripe Payments", description: "Process payments and manage subscriptions", category: "integrations", icon: "💳", rating: 4.9, downloads: "178K", installed: false, author: "Stripe" },
+  { id: "10", name: "Claude 3.5", description: "Anthropic's most capable AI assistant", category: "ai", icon: "🧠", rating: 4.8, downloads: "145K", installed: false, featured: true, author: "Anthropic" },
+];
+
+const categories = [
+  { id: "all", label: "All", icon: "🏠" },
+  { id: "data", label: "Data Sources", icon: "🗄️" },
+  { id: "tools", label: "Tools", icon: "🔧" },
+  { id: "integrations", label: "Integrations", icon: "🔗" },
+  { id: "ai", label: "AI Models", icon: "🤖" },
+];
+
+export const MCPMarketplaceModal = ({ 
   isOpen, 
   onClose, 
-  onSave,
-  initialResources = [],
-  initialTools = []
-}: MCPConfigModalProps) => {
-  const [resources, setResources] = useState<string[]>(initialResources);
-  const [tools, setTools] = useState<string[]>(initialTools);
-  const [newResource, setNewResource] = useState("");
-  const [newTool, setNewTool] = useState("");
+  onInstall
+}: MCPMarketplaceModalProps) => {
+  const [items, setItems] = useState<MCPItem[]>(mcpItems);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [activeTab, setActiveTab] = useState<"browse" | "installed">("browse");
 
-  const addResource = () => {
-    if (newResource.trim()) {
-      setResources([...resources, newResource.trim()]);
-      setNewResource("");
-    }
-  };
+  const filteredItems = items.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         item.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
+    const matchesTab = activeTab === "browse" || item.installed;
+    return matchesSearch && matchesCategory && matchesTab;
+  });
 
-  const addTool = () => {
-    if (newTool.trim()) {
-      setTools([...tools, newTool.trim()]);
-      setNewTool("");
-    }
+  const featuredItems = items.filter(item => item.featured);
+
+  const handleInstall = (itemId: string) => {
+    setItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, installed: !item.installed } : item
+    ));
+    onInstall(itemId);
   };
 
   return (
@@ -311,114 +344,197 @@ export const MCPConfigModal = ({
           />
 
           <motion.div
-            className="relative w-full max-w-lg mx-4 bg-card border border-blue-500/30 rounded-xl shadow-[0_0_50px_hsl(217_90%_60%/0.2)] overflow-hidden"
+            className="relative w-full max-w-4xl mx-4 bg-card border border-cyan-500/30 rounded-xl shadow-[0_0_50px_hsl(180_70%_50%/0.2)] overflow-hidden max-h-[85vh]"
             initial={{ scale: 0.9, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 20 }}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500/20 to-indigo-500/20 p-4 border-b border-blue-500/30">
+            <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 p-4 border-b border-cyan-500/30">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <Settings className="w-5 h-5 text-blue-400" />
-                  </div>
+                  <motion.div 
+                    className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center text-xl"
+                    animate={{ rotate: [0, 5, -5, 0] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    🔌
+                  </motion.div>
                   <div>
-                    <h3 className="font-semibold text-foreground">[MCP] Configuration</h3>
-                    <p className="text-xs text-muted-foreground">Model Context Protocol Setup</p>
+                    <h3 className="font-semibold text-foreground text-lg">MCP Marketplace</h3>
+                    <p className="text-xs text-muted-foreground">Model Context Protocol Extensions</p>
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-            </div>
 
-            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
-              {/* Resource URIs */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium text-foreground">Resource URIs</Label>
-                <div className="flex gap-2">
-                  <Input 
-                    value={newResource}
-                    onChange={(e) => setNewResource(e.target.value)}
-                    placeholder="file://./data/context.json"
-                    className="flex-1 font-mono text-sm"
-                    onKeyDown={(e) => e.key === "Enter" && addResource()}
-                  />
-                  <Button size="icon" onClick={addResource} className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-                <div className="space-y-2">
-                  {resources.map((uri, i) => (
-                    <motion.div 
-                      key={i}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border/50"
-                    >
-                      <span className="text-sm font-mono text-muted-foreground truncate flex-1 mr-2">{uri}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        className="h-7 w-7 text-red-400 hover:text-red-300"
-                        onClick={() => setResources(resources.filter((_, idx) => idx !== i))}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </motion.div>
-                  ))}
-                </div>
+              {/* Search Bar */}
+              <div className="mt-4 relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search connectors, tools, and integrations..."
+                  className="w-full px-4 py-2.5 pl-10 rounded-lg bg-background/50 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-500/50"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">🔍</span>
               </div>
 
-              {/* Tools */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium text-foreground">Tools</Label>
-                <div className="flex gap-2">
-                  <Input 
-                    value={newTool}
-                    onChange={(e) => setNewTool(e.target.value)}
-                    placeholder="web_search, code_interpreter"
-                    className="flex-1 font-mono text-sm"
-                    onKeyDown={(e) => e.key === "Enter" && addTool()}
-                  />
-                  <Button size="icon" onClick={addTool} className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {tools.map((tool, i) => (
-                    <motion.div 
-                      key={i}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/30"
+              {/* Tabs */}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => setActiveTab("browse")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === "browse" 
+                      ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  Browse All
+                </button>
+                <button
+                  onClick={() => setActiveTab("installed")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === "installed" 
+                      ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  Installed ({items.filter(i => i.installed).length})
+                </button>
+              </div>
+            </div>
+
+            <div className="flex max-h-[calc(85vh-180px)]">
+              {/* Category Sidebar */}
+              <div className="w-48 p-4 border-r border-border/50 overflow-y-auto">
+                <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
+                  Categories
+                </p>
+                <div className="space-y-1">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        selectedCategory === cat.id 
+                          ? "bg-cyan-500/20 text-cyan-400" 
+                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
                     >
-                      <span className="text-xs font-mono text-blue-300">{tool}</span>
-                      <button 
-                        className="text-blue-400 hover:text-blue-300"
-                        onClick={() => setTools(tools.filter((_, idx) => idx !== i))}
+                      <span>{cat.icon}</span>
+                      <span>{cat.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Featured Section */}
+                <div className="mt-6">
+                  <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
+                    ⭐ Featured
+                  </p>
+                  <div className="space-y-2">
+                    {featuredItems.slice(0, 3).map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleInstall(item.id)}
+                        className="w-full text-left p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-colors"
                       >
-                        <X className="w-3 h-3" />
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="text-xs font-medium text-foreground truncate">{item.name}</span>
+                        </div>
                       </button>
-                    </motion.div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-border/30 flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button 
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
-                onClick={() => onSave({ resources, tools })}
-              >
-                Save Configuration
-              </Button>
+              {/* Items Grid */}
+              <div className="flex-1 p-4 overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <AnimatePresence mode="popLayout">
+                    {filteredItems.map((item, index) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: index * 0.03 }}
+                        className={`p-4 rounded-xl border transition-all hover:shadow-lg ${
+                          item.installed 
+                            ? "bg-cyan-500/5 border-cyan-500/30" 
+                            : "bg-muted/30 border-border/50 hover:border-cyan-500/30"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${
+                              item.installed ? "bg-cyan-500/20" : "bg-muted"
+                            }`}>
+                              {item.icon}
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-foreground text-sm">
+                                {item.name}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">{item.author}</p>
+                            </div>
+                          </div>
+                          {item.featured && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-medium">
+                              Featured
+                            </span>
+                          )}
+                        </div>
+                        
+                        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+                          {item.description}
+                        </p>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span>⭐ {item.rating}</span>
+                            <span>⬇️ {item.downloads}</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={item.installed ? "outline" : "default"}
+                            onClick={() => handleInstall(item.id)}
+                            className={`text-xs h-7 ${
+                              item.installed 
+                                ? "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10" 
+                                : "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white"
+                            }`}
+                          >
+                            {item.installed ? (
+                              <>
+                                <Check className="w-3 h-3 mr-1" />
+                                Installed
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="w-3 h-3 mr-1" />
+                                Install
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+
+                {filteredItems.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                    <span className="text-4xl mb-2">🔍</span>
+                    <p className="text-sm">No connectors found</p>
+                    <p className="text-xs">Try adjusting your search or category</p>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         </motion.div>
