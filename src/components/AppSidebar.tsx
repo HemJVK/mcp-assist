@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Wrench, LayoutDashboard, FileText, Sparkles } from "lucide-react";
+import { Home, MessageSquare, Cpu, LayoutDashboard, FileText, Sparkles, Shield, Zap } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -12,13 +12,14 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import logo from "@/assets/intelliagent-logo.png";
 
 const items = [
   { title: "Home", url: "/", icon: Home },
   { title: "Chat", url: "/app", icon: MessageSquare },
-  { title: "Build", url: "/app", icon: Wrench },
-  { title: "Dashboard", url: "/app", icon: LayoutDashboard },
-  { title: "Documentation", url: "/app", icon: FileText },
+  { title: "Command Center", url: "/app/command", icon: Cpu },
+  { title: "Dashboard", url: "/app/dashboard", icon: LayoutDashboard },
+  { title: "Documentation", url: "/docs", icon: FileText },
 ];
 
 export function AppSidebar() {
@@ -29,9 +30,7 @@ export function AppSidebar() {
       <SidebarContent className="pt-4">
         {/* Logo/Brand */}
         <div className="px-6 pb-6 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary via-accent to-secondary flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
+          <img src={logo} alt="IntelliAgent" className="w-8 h-8" />
           {open && (
             <span className="text-lg font-bold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
               IntelliAgent
