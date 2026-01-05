@@ -1,25 +1,38 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { ChatInterface } from "@/components/ChatInterface";
-import { WorkflowLog } from "@/components/WorkflowLog";
-import { Settings, HelpCircle, User } from "lucide-react";
+import { CommandCenter } from "@/components/agentic/CommandCenter";
+import { Settings, HelpCircle, User, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 
 const AppPage = () => {
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="min-h-screen flex w-full bg-background dark">
         <AppSidebar />
 
         <div className="flex-1 flex flex-col">
           {/* Top Header Bar */}
-          <header className="h-14 border-b border-border/50 flex items-center justify-between px-6 bg-card/50 backdrop-blur-sm">
+          <header className="h-14 border-b border-border/30 flex items-center justify-between px-6 bg-card/30 backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <SidebarTrigger />
-              <h1 className="text-sm font-medium text-muted-foreground">IntelliAgent Studio</h1>
+              <div className="flex items-center gap-2">
+                <motion.div 
+                  className="w-2 h-2 rounded-full bg-green-500"
+                  animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                <h1 className="text-sm font-medium text-muted-foreground">
+                  Agentic UI Command Center
+                </h1>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 mr-4">
+                <Zap className="w-3 h-3 text-primary" />
+                <span className="text-xs font-mono text-primary">2025 Standardized Stack</span>
+              </div>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Settings className="w-4 h-4" />
               </Button>
@@ -32,17 +45,9 @@ const AppPage = () => {
             </div>
           </header>
 
-          {/* Main Content Area */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* Chat Interface - Takes 60% */}
-            <div className="flex-1 min-w-0">
-              <ChatInterface />
-            </div>
-
-            {/* Workflow Log Sidebar - Takes 40% */}
-            <div className="w-[40%] border-l border-border/50 min-w-[400px] max-w-[600px]">
-              <WorkflowLog />
-            </div>
+          {/* Main Content Area - Command Center */}
+          <div className="flex-1 overflow-hidden">
+            <CommandCenter />
           </div>
         </div>
       </div>
