@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ProtocolLog, LogEntry, ProtocolType } from "./ProtocolLog";
 import { AgentCanvas, AgentNode, Connection } from "./AgentCanvas";
-import { AP2MandateModal, AGPInterceptModal, MCPConfigModal } from "./HITLModals";
+import { AP2MandateModal, AGPInterceptModal, MCPMarketplaceModal } from "./HITLModals";
 
 // Demo data
 const initialAgents: AgentNode[] = [
@@ -240,15 +240,12 @@ export const CommandCenter = () => {
         destination="api.openai.com"
       />
 
-      <MCPConfigModal
+      <MCPMarketplaceModal
         isOpen={showMCPModal}
         onClose={() => setShowMCPModal(false)}
-        onSave={(config) => {
-          console.log("MCP Config:", config);
-          setShowMCPModal(false);
+        onInstall={(itemId) => {
+          console.log("Installed MCP item:", itemId);
         }}
-        initialResources={["file://./context/knowledge.json"]}
-        initialTools={["web_search", "code_interpreter"]}
       />
     </div>
   );
