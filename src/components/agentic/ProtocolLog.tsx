@@ -12,17 +12,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-export type ProtocolType = "ANS" | "ACDP" | "TDF" | "AGP" | "AP2" | "A2A" | "MCP";
-
-interface LogEntry {
-  id: string;
-  timestamp: Date;
-  protocol: ProtocolType;
-  message: string;
-  status: "pending" | "active" | "complete" | "alert";
-  details?: string;
-}
+import { LogEntry, ProtocolType } from "@/types";
 
 const protocolConfig: Record<ProtocolType, { 
   label: string; 
@@ -166,9 +156,18 @@ export const ProtocolLog = ({ entries, activeProtocol }: ProtocolLogProps) => {
 
                     {/* Details */}
                     {entry.details && (
-                      <p className="text-[10px] text-muted-foreground mt-1 font-mono">
-                        {entry.details}
-                      </p>
+                      <div className="mt-1">
+                        <details className="text-[10px] text-muted-foreground font-mono">
+                          <summary className="cursor-pointer hover:text-foreground list-none flex items-center gap-1">
+                            <span className="text-xs">▶</span> Show details
+                          </summary>
+                          <div className="mt-1 p-3 bg-black/40 rounded-md overflow-x-auto border border-white/10 shadow-inner">
+                            <pre className="text-[10px] leading-relaxed text-cyan-100/80 font-mono whitespace-pre-wrap selection:bg-cyan-500/30">
+                              {entry.details}
+                            </pre>
+                          </div>
+                        </details>
+                      </div>
                     )}
 
                     {/* Protocol Label */}

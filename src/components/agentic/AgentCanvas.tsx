@@ -1,23 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Bot, Cpu, Database, Globe, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
-
-interface AgentNode {
-  id: string;
-  name: string;
-  type: "coordinator" | "specialist" | "data" | "external";
-  x: number;
-  y: number;
-  status: "idle" | "active" | "processing";
-}
-
-interface Connection {
-  id: string;
-  from: string;
-  to: string;
-  active: boolean;
-  protocol: string;
-}
+import { AgentNode, Connection } from "@/types";
 
 const agentIcons = {
   coordinator: Cpu,
@@ -54,6 +38,27 @@ export const AgentCanvas = ({ agents, connections, onAgentClick }: AgentCanvasPr
 
   return (
     <div className="relative w-full h-full bg-gradient-to-br from-card/20 via-background to-card/10 overflow-hidden">
+      {/* Status Badge */}
+      <div className="absolute top-4 right-4 z-10">
+        <motion.div
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/50 backdrop-blur-sm border border-border/50 shadow-sm"
+          animate={pulsingConnections.size > 0 ? { borderColor: "hsl(142 70% 45% / 0.5)", backgroundColor: "hsl(142 70% 45% / 0.1)" } : {}}
+        >
+          <div className="relative flex h-2 w-2">
+            {pulsingConnections.size > 0 && (
+              <motion.span
+                className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+                transition={{ duration: 1, repeat: Infinity }}
+              />
+            )}
+            <div className={`relative inline-flex rounded-full h-2 w-2 ${pulsingConnections.size > 0 ? "bg-green-500" : "bg-muted-foreground"}`} />
+          </div>
+          <span className={`text-[10px] font-medium uppercase tracking-wider ${pulsingConnections.size > 0 ? "text-green-500" : "text-muted-foreground"}`}>
+            {pulsingConnections.size > 0 ? "Network Active" : "Network Idle"}
+          </span>
+        </motion.div>
+      </div>
+
       {/* Grid Background */}
       <div 
         className="absolute inset-0 opacity-20"
