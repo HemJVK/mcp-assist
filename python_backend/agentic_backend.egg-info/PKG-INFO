@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: agentic-backend
+Version: 0.1.0
+Summary: 2025 Standardized Agentic Stack Orchestrator
+Author-email: Jules <jules@example.com>
+License: MIT
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: uvicorn>=0.20.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: cryptography>=41.0.0
+Requires-Dist: httpx>=0.24.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: isort; extra == "dev"

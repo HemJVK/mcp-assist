@@ -1,0 +1,14 @@
+pyproject.toml
+agentic_backend.egg-info/PKG-INFO
+agentic_backend.egg-info/SOURCES.txt
+agentic_backend.egg-info/dependency_links.txt
+agentic_backend.egg-info/requires.txt
+agentic_backend.egg-info/top_level.txt
+app/__init__.py
+app/main.py
+app/mcp_server.py
+app/gateway/middleware.py
+app/protocols/ap2.py
+app/protocols/fcp.py
+app/protocols/tdf.py
+app/registry/service.py
