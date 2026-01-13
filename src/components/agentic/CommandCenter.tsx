@@ -399,14 +399,16 @@ export const CommandCenter = () => {
           </AnimatePresence>
         </div>
 
-        {/* Right Panel - Task Execution Log or Protocol Log */}
-        <div className="w-[380px] min-w-[320px] flex flex-col">
-          {activeView === "chat" ? (
-            <WorkflowLog />
-          ) : (
-            <ProtocolLog entries={logEntries} activeProtocol={activeProtocol} />
-          )}
-        </div>
+        {/* Right Panel - Task Execution Log or Protocol Log (only show after query execution) */}
+        {(activeView === "canvas" || messages.length > 0) && (
+          <div className="w-[380px] min-w-[320px] flex flex-col">
+            {activeView === "chat" ? (
+              <WorkflowLog />
+            ) : (
+              <ProtocolLog entries={logEntries} activeProtocol={activeProtocol} />
+            )}
+          </div>
+        )}
       </div>
 
       {/* HITL Modals */}
