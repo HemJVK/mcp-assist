@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Play, 
   Pause, 
@@ -8,12 +8,19 @@ import {
   Zap,
   Shield,
   Wallet,
-  ChevronRight
+  Send,
+  Loader2,
+  Layers,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProtocolLog, LogEntry, ProtocolType } from "./ProtocolLog";
 import { AgentCanvas, AgentNode, Connection } from "./AgentCanvas";
 import { AP2MandateModal, AGPInterceptModal, MCPMarketplaceModal } from "./HITLModals";
+import { WorkflowLog } from "@/components/WorkflowLog";
 
 // Demo data
 const initialAgents: AgentNode[] = [
@@ -41,6 +48,13 @@ const demoLogEntries: Omit<LogEntry, "id" | "timestamp">[] = [
   { protocol: "AP2", message: "Payment authorization requested", status: "alert", details: "$45.00 for API credits" },
 ];
 
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+}
+
 export const CommandCenter = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
@@ -48,6 +62,12 @@ export const CommandCenter = () => {
   const [connections, setConnections] = useState(initialConnections);
   const [activeProtocol, setActiveProtocol] = useState<ProtocolType | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [activeView, setActiveView] = useState<"chat" | "canvas">("chat");
+
+  // Chat states
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Modal states
   const [showAP2Modal, setShowAP2Modal] = useState(false);
@@ -137,84 +157,255 @@ export const CommandCenter = () => {
     setIsRunning(true);
   };
 
+  // Chat handlers
+  const handleSend = async () => {
+    if (!input.trim()) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsProcessing(true);
+    
+    // Start the simulation when user sends a message
+    setIsRunning(true);
+
+    // Simulate AI processing
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "I understand your request. I'll help you automate this task using LLMs and MCPs. Check the Task Execution Log on the right to see the workflow progress.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+      setIsProcessing(false);
+    }, 2000);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Top Control Bar */}
-      <div className="h-14 border-b border-border/30 bg-card/30 backdrop-blur-xl flex items-center justify-between px-4">
-        <div className="flex items-center gap-4">
-          <motion.div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30"
-            animate={isRunning ? { boxShadow: ["0 0 0px hsl(var(--primary))", "0 0 20px hsl(var(--primary) / 0.5)", "0 0 0px hsl(var(--primary))"] } : {}}
-            transition={{ duration: 1.5, repeat: isRunning ? Infinity : 0 }}
-          >
-            <Zap className={`w-4 h-4 ${isRunning ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
-            <span className="text-sm font-medium text-foreground">
-              {isRunning ? "Executing" : "Ready"}
-            </span>
-          </motion.div>
-
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsRunning(!isRunning)}
-              className="gap-2"
-            >
-              {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              {isRunning ? "Pause" : "Start"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleReset}>
-              <RotateCcw className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Quick action buttons */}
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="gap-2 border-green-500/30 text-green-400 hover:bg-green-500/10"
-            onClick={() => setShowAP2Modal(true)}
-          >
-            <Wallet className="w-4 h-4" />
-            AP2
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
-            onClick={() => setShowAGPModal(true)}
-          >
-            <Shield className="w-4 h-4" />
-            AGP
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="gap-2 border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-            onClick={() => setShowMCPModal(true)}
-          >
-            <Settings className="w-4 h-4" />
-            MCP
-          </Button>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Center: Agent Canvas */}
-        <div className="flex-1 min-w-0">
-          <AgentCanvas 
-            agents={agents} 
-            connections={connections}
-            onAgentClick={(agent) => console.log("Clicked:", agent)}
-          />
+        {/* Left/Center Panel - Chat or Canvas */}
+        <div className="flex-1 flex flex-col min-w-0 border-r border-border/30">
+          {/* Panel Header with Tabs */}
+          <div className="border-b border-border/30 px-6 py-3 flex items-center justify-between bg-card/30 backdrop-blur-sm">
+            <div>
+              <h2 className="text-xl font-semibold">
+                {activeView === "chat" ? "Chat prompt" : "Agent Orchestration Canvas"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {activeView === "chat" 
+                  ? "Intelligent automation for optimizing processes" 
+                  : "A2A Protocol Visualization"}
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              {/* View Toggle */}
+              <Tabs value={activeView} onValueChange={(v) => setActiveView(v as "chat" | "canvas")}>
+                <TabsList className="bg-muted/50">
+                  <TabsTrigger value="chat" className="gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    Chat
+                  </TabsTrigger>
+                  <TabsTrigger value="canvas" className="gap-2">
+                    <Layers className="w-4 h-4" />
+                    Canvas
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              {/* Control Buttons (visible in canvas mode) */}
+              {activeView === "canvas" && (
+                <div className="flex items-center gap-2">
+                  <motion.div
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30"
+                    animate={isRunning ? { boxShadow: ["0 0 0px hsl(var(--primary))", "0 0 20px hsl(var(--primary) / 0.5)", "0 0 0px hsl(var(--primary))"] } : {}}
+                    transition={{ duration: 1.5, repeat: isRunning ? Infinity : 0 }}
+                  >
+                    <Zap className={`w-4 h-4 ${isRunning ? "text-primary animate-pulse" : "text-muted-foreground"}`} />
+                    <span className="text-sm font-medium text-foreground">
+                      {isRunning ? "Executing" : "Ready"}
+                    </span>
+                  </motion.div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsRunning(!isRunning)}
+                    className="gap-2"
+                  >
+                    {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {isRunning ? "Pause" : "Start"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleReset}>
+                    <RotateCcw className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Quick action buttons */}
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="gap-2 border-green-500/30 text-green-400 hover:bg-green-500/10"
+                  onClick={() => setShowAP2Modal(true)}
+                >
+                  <Wallet className="w-4 h-4" />
+                  AP2
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  onClick={() => setShowAGPModal(true)}
+                >
+                  <Shield className="w-4 h-4" />
+                  AGP
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="gap-2 border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                  onClick={() => setShowMCPModal(true)}
+                >
+                  <Settings className="w-4 h-4" />
+                  MCP
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <AnimatePresence mode="wait">
+            {activeView === "chat" ? (
+              <motion.div
+                key="chat"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                {/* Messages Area */}
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                  {messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center space-y-4 max-w-md">
+                        <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 flex items-center justify-center">
+                          <Send className="w-10 h-10 text-primary" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-foreground">Start a conversation</h3>
+                        <p className="text-muted-foreground leading-relaxed">
+                          Type your request below to automate tasks with AI-powered agents.
+                          For example: "Draft a mail to xyz@gmail.com on updating their Jira Status for PROJ-1234"
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    messages.map((message) => (
+                      <Card
+                        key={message.id}
+                        className={`p-4 ${
+                          message.role === "user"
+                            ? "bg-muted/50 ml-auto max-w-[80%]"
+                            : "bg-primary/5 border-primary/20 max-w-[80%]"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              message.role === "user"
+                                ? "bg-secondary text-secondary-foreground"
+                                : "bg-primary text-primary-foreground"
+                            }`}
+                          >
+                            {message.role === "user" ? "U" : "AI"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                            <span className="text-xs text-muted-foreground mt-2 block">
+                              {message.timestamp.toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                      </Card>
+                    ))
+                  )}
+                  {isProcessing && (
+                    <Card className="p-4 bg-muted/30 max-w-[80%]">
+                      <div className="flex items-center gap-3">
+                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">Processing...</span>
+                      </div>
+                    </Card>
+                  )}
+                </div>
+
+                {/* Input Area */}
+                <div className="border-t border-border/30 p-4 bg-card/30">
+                  <div className="flex gap-3 items-end">
+                    <Textarea
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Draft a mail to xyz@gmail.com on updating their Jira Status for PROJ-1234"
+                      className="min-h-[60px] max-h-[120px] resize-none bg-muted/50 border-border/50 focus:border-primary transition-colors"
+                    />
+                    <Button
+                      onClick={handleSend}
+                      disabled={!input.trim() || isProcessing}
+                      size="lg"
+                      className="px-6 bg-gradient-to-r from-primary to-accent hover:shadow-lg transition-all"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Send className="w-5 h-5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="canvas"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="flex-1"
+              >
+                <AgentCanvas 
+                  agents={agents} 
+                  connections={connections}
+                  onAgentClick={(agent) => console.log("Clicked:", agent)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Right: Protocol Log */}
-        <div className="w-[380px] min-w-[320px]">
-          <ProtocolLog entries={logEntries} activeProtocol={activeProtocol} />
+        {/* Right Panel - Task Execution Log or Protocol Log */}
+        <div className="w-[380px] min-w-[320px] flex flex-col">
+          {activeView === "chat" ? (
+            <WorkflowLog />
+          ) : (
+            <ProtocolLog entries={logEntries} activeProtocol={activeProtocol} />
+          )}
         </div>
       </div>
 
