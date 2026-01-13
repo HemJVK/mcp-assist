@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   Play, 
@@ -7,135 +6,34 @@ import {
   Settings, 
   Zap,
   Shield,
-  Wallet,
-  ChevronRight
+  Wallet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ProtocolLog, LogEntry, ProtocolType } from "./ProtocolLog";
-import { AgentCanvas, AgentNode, Connection } from "./AgentCanvas";
+import { ProtocolLog } from "./ProtocolLog";
+import { AgentCanvas } from "./AgentCanvas";
 import { AP2MandateModal, AGPInterceptModal, MCPMarketplaceModal } from "./HITLModals";
-
-// Demo data
-const initialAgents: AgentNode[] = [
-  { id: "coordinator", name: "Coordinator", type: "coordinator", x: 50, y: 30, status: "active" },
-  { id: "research", name: "Research Agent", type: "specialist", x: 25, y: 55, status: "idle" },
-  { id: "writer", name: "Writer Agent", type: "specialist", x: 75, y: 55, status: "idle" },
-  { id: "database", name: "Vector DB", type: "data", x: 20, y: 80, status: "idle" },
-  { id: "api", name: "External API", type: "external", x: 80, y: 80, status: "idle" },
-];
-
-const initialConnections: Connection[] = [
-  { id: "c1", from: "coordinator", to: "research", active: false, protocol: "A2A" },
-  { id: "c2", from: "coordinator", to: "writer", active: false, protocol: "A2A" },
-  { id: "c3", from: "research", to: "database", active: false, protocol: "MCP" },
-  { id: "c4", from: "writer", to: "api", active: false, protocol: "AGP" },
-];
-
-const demoLogEntries: Omit<LogEntry, "id" | "timestamp">[] = [
-  { protocol: "ANS", message: "Discovering available agents in network...", status: "complete", details: "3 agents found" },
-  { protocol: "ACDP", message: "Agent capability profiles exchanged", status: "complete" },
-  { protocol: "TDF", message: "Task contract established with Research Agent", status: "active", details: "Contract ID: tdf-7829" },
-  { protocol: "A2A", message: "Delegating research subtask to specialist", status: "pending" },
-  { protocol: "MCP", message: "Accessing vector database context", status: "pending" },
-  { protocol: "AGP", message: "Security scan on outbound API request", status: "alert", details: "Sensitive data detected" },
-  { protocol: "AP2", message: "Payment authorization requested", status: "alert", details: "$45.00 for API credits" },
-];
+import { useAgentSimulation } from "@/hooks/useAgentSimulation";
 
 export const CommandCenter = () => {
-  const [isRunning, setIsRunning] = useState(false);
-  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-  const [agents, setAgents] = useState(initialAgents);
-  const [connections, setConnections] = useState(initialConnections);
-  const [activeProtocol, setActiveProtocol] = useState<ProtocolType | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-
-  // Modal states
-  const [showAP2Modal, setShowAP2Modal] = useState(false);
-  const [showAGPModal, setShowAGPModal] = useState(false);
-  const [showMCPModal, setShowMCPModal] = useState(false);
-
-  // Simulation effect
-  useEffect(() => {
-    if (!isRunning || currentStep >= demoLogEntries.length) return;
-
-    const timer = setTimeout(() => {
-      const entry = demoLogEntries[currentStep];
-      const newEntry: LogEntry = {
-        ...entry,
-        id: `log-${Date.now()}`,
-        timestamp: new Date(),
-      };
-
-      setLogEntries(prev => [newEntry, ...prev]);
-      setActiveProtocol(entry.protocol);
-
-      // Update agent states based on protocol
-      if (entry.protocol === "A2A") {
-        setConnections(prev => prev.map(c => 
-          c.id === "c1" ? { ...c, active: true } : c
-        ));
-        setAgents(prev => prev.map(a => 
-          a.id === "research" ? { ...a, status: "processing" } : a
-        ));
-      }
-
-      if (entry.protocol === "MCP") {
-        setConnections(prev => prev.map(c => 
-          c.id === "c3" ? { ...c, active: true } : c
-        ));
-        setAgents(prev => prev.map(a => 
-          a.id === "database" ? { ...a, status: "active" } : a
-        ));
-      }
-
-      if (entry.protocol === "AGP" && entry.status === "alert") {
-        setShowAGPModal(true);
-        setIsRunning(false);
-      }
-
-      if (entry.protocol === "AP2" && entry.status === "alert") {
-        setShowAP2Modal(true);
-        setIsRunning(false);
-      }
-
-      setCurrentStep(prev => prev + 1);
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [isRunning, currentStep]);
-
-  const handleReset = () => {
-    setIsRunning(false);
-    setLogEntries([]);
-    setAgents(initialAgents);
-    setConnections(initialConnections);
-    setActiveProtocol(null);
-    setCurrentStep(0);
-  };
-
-  const handleAGPAllow = () => {
-    setShowAGPModal(false);
-    setLogEntries(prev => [{
-      id: `log-${Date.now()}`,
-      timestamp: new Date(),
-      protocol: "AGP",
-      message: "Outbound request approved by user",
-      status: "complete",
-    }, ...prev]);
-    setIsRunning(true);
-  };
-
-  const handleAP2Sign = (budget: number) => {
-    setShowAP2Modal(false);
-    setLogEntries(prev => [{
-      id: `log-${Date.now()}`,
-      timestamp: new Date(),
-      protocol: "AP2",
-      message: `Payment mandate signed - Max budget: $${budget.toFixed(2)}`,
-      status: "complete",
-    }, ...prev]);
-    setIsRunning(true);
-  };
+  const {
+    mode,
+    setMode,
+    isRunning,
+    setIsRunning,
+    logEntries,
+    agents,
+    connections,
+    activeProtocol,
+    showAP2Modal,
+    setShowAP2Modal,
+    showAGPModal,
+    setShowAGPModal,
+    showMCPModal,
+    setShowMCPModal,
+    handleReset,
+    handleAGPAllow,
+    handleAP2Sign,
+  } = useAgentSimulation();
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -152,6 +50,26 @@ export const CommandCenter = () => {
               {isRunning ? "Executing" : "Ready"}
             </span>
           </motion.div>
+
+          <div className="flex items-center gap-2 border-r pr-4 border-border/30">
+            <span className="text-xs text-muted-foreground">Mode:</span>
+            <div className="flex bg-muted/50 rounded-md p-0.5">
+              <button
+                onClick={() => setMode("simulation")}
+                title="Use mock data for demonstration"
+                className={`px-2 py-0.5 text-xs rounded-sm transition-colors ${mode === "simulation" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Sim
+              </button>
+              <button
+                onClick={() => setMode("real")}
+                title="Connect to local MCP backend (http://localhost:3000)"
+                className={`px-2 py-0.5 text-xs rounded-sm transition-colors ${mode === "real" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Real
+              </button>
+            </div>
+          </div>
 
           <div className="flex items-center gap-1">
             <Button
