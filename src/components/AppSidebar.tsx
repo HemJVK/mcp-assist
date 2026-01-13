@@ -17,7 +17,7 @@ import logo from "@/assets/intelliagent-logo.png";
 const items = [
   { title: "Home", url: "/", icon: Home },
   { title: "Chat", url: "/app", icon: MessageSquare },
-  { title: "Command Center", url: "/app/command", icon: Cpu },
+  { title: "Build", url: "/app/build", icon: Cpu },
   { title: "Dashboard", url: "/app/dashboard", icon: LayoutDashboard },
   { title: "Documentation", url: "/docs", icon: FileText },
 ];
