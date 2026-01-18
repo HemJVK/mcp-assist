@@ -11,8 +11,11 @@ import {
   Send,
   Loader2,
   Layers,
-  MessageSquare
+  MessageSquare,
+  Mic,
+  MicOff
 } from "lucide-react";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
@@ -68,6 +71,23 @@ export const CommandCenter = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Voice input
+  const { 
+    isListening, 
+    isSupported: isVoiceSupported, 
+    interimTranscript,
+    toggleListening,
+    stopListening,
+  } = useVoiceInput({
+    onTranscript: (text) => {
+      setInput(prev => prev + (prev ? " " : "") + text);
+    },
+    onInterimTranscript: (text) => {
+      // Visual feedback handled through interimTranscript state
+    },
+    continuous: true,
+  });
 
   // Modal states
   const [showAP2Modal, setShowAP2Modal] = useState(false);
@@ -358,12 +378,77 @@ export const CommandCenter = () => {
 
                 {/* Input Area */}
                 <div className="border-t border-border/30 p-4 bg-card/30">
+                  {/* Voice Listening Indicator */}
+                  <AnimatePresence>
+                    {isListening && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mb-3 flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 border border-primary/30"
+                      >
+                        <motion.div
+                          className="w-3 h-3 rounded-full bg-red-500"
+                          animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
+                          transition={{ duration: 1, repeat: Infinity }}
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-primary">Listening...</p>
+                          {interimTranscript && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">
+                              "{interimTranscript}"
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={stopListening}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        >
+                          Stop
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <div className="flex gap-3 items-end">
+                    {/* Voice Input Button */}
+                    {isVoiceSupported && (
+                      <motion.div
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <Button
+                          variant={isListening ? "default" : "outline"}
+                          size="lg"
+                          onClick={toggleListening}
+                          className={`relative ${
+                            isListening 
+                              ? "bg-red-500 hover:bg-red-600 text-white" 
+                              : "border-border/50 hover:border-primary hover:bg-primary/10"
+                          }`}
+                        >
+                          {isListening ? (
+                            <>
+                              <motion.div
+                                className="absolute inset-0 rounded-md bg-red-500/50"
+                                animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
+                                transition={{ duration: 1.5, repeat: Infinity }}
+                              />
+                              <MicOff className="w-5 h-5 relative z-10" />
+                            </>
+                          ) : (
+                            <Mic className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </motion.div>
+                    )}
+
                     <Textarea
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Draft a mail to xyz@gmail.com on updating their Jira Status for PROJ-1234"
+                      placeholder={isListening ? "Speak now..." : "Draft a mail to xyz@gmail.com on updating their Jira Status for PROJ-1234"}
                       className="min-h-[60px] max-h-[120px] resize-none bg-muted/50 border-border/50 focus:border-primary transition-colors"
                     />
                     <Button
