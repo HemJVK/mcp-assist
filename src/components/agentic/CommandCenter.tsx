@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Play, 
@@ -13,19 +13,32 @@ import {
   Layers,
   MessageSquare,
   Mic,
-  MicOff
+  MicOff,
+  AlertCircle
 } from "lucide-react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProtocolLog, LogEntry, ProtocolType } from "./ProtocolLog";
 import { AgentCanvas, AgentNode, Connection } from "./AgentCanvas";
 import { AP2MandateModal, AGPInterceptModal, MCPMarketplaceModal } from "./HITLModals";
+import { ContactSelectorModal } from "./ContactSelectorModal";
+import { EmailDraftPreviewModal } from "./EmailDraftPreviewModal";
 import { WorkflowLog } from "@/components/WorkflowLog";
+import { toast } from "sonner";
+import * as EmailAgentService from "@/services/email-agent";
+import type { 
+  Message, 
+  Contact, 
+  EmailDraft, 
+  ParsedIntent, 
+  UserProfile,
+  WorkflowStep 
+} from "@/types/email-agent";
 
-// Demo data
+// Demo data for agent canvas
 const initialAgents: AgentNode[] = [
   { id: "coordinator", name: "Coordinator", type: "coordinator", x: 50, y: 30, status: "active" },
   { id: "research", name: "Research Agent", type: "specialist", x: 25, y: 55, status: "idle" },
@@ -41,22 +54,14 @@ const initialConnections: Connection[] = [
   { id: "c4", from: "writer", to: "api", active: false, protocol: "AGP" },
 ];
 
-const demoLogEntries: Omit<LogEntry, "id" | "timestamp">[] = [
-  { protocol: "ANS", message: "Discovering available agents in network...", status: "complete", details: "3 agents found" },
-  { protocol: "ACDP", message: "Agent capability profiles exchanged", status: "complete" },
-  { protocol: "TDF", message: "Task contract established with Research Agent", status: "active", details: "Contract ID: tdf-7829" },
-  { protocol: "A2A", message: "Delegating research subtask to specialist", status: "pending" },
-  { protocol: "MCP", message: "Accessing vector database context", status: "pending" },
-  { protocol: "AGP", message: "Security scan on outbound API request", status: "alert", details: "Sensitive data detected" },
-  { protocol: "AP2", message: "Payment authorization requested", status: "alert", details: "$45.00 for API credits" },
-];
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
+// Default user profile (in production, would come from auth/registration)
+const defaultUserProfile: UserProfile = {
+  name: "Alex Johnson",
+  email: "alex.johnson@company.com",
+  designation: "Product Manager",
+  phone: "+1 (555) 123-4567",
+  company: "TechCorp Inc."
+};
 
 export const CommandCenter = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -64,13 +69,19 @@ export const CommandCenter = () => {
   const [agents, setAgents] = useState(initialAgents);
   const [connections, setConnections] = useState(initialConnections);
   const [activeProtocol, setActiveProtocol] = useState<ProtocolType | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
   const [activeView, setActiveView] = useState<"chat" | "canvas">("chat");
 
   // Chat states
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Workflow states
+  const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([]);
+  const [currentIntent, setCurrentIntent] = useState<ParsedIntent | null>(null);
+  const [currentDraft, setCurrentDraft] = useState<EmailDraft | null>(null);
+  const [resolvedRecipients, setResolvedRecipients] = useState<Contact[]>([]);
+  const [pendingRecipients, setPendingRecipients] = useState<string[]>([]);
 
   // Voice input
   const { 
@@ -83,9 +94,6 @@ export const CommandCenter = () => {
     onTranscript: (text) => {
       setInput(prev => prev + (prev ? " " : "") + text);
     },
-    onInterimTranscript: (text) => {
-      // Visual feedback handled through interimTranscript state
-    },
     continuous: true,
   });
 
@@ -93,56 +101,373 @@ export const CommandCenter = () => {
   const [showAP2Modal, setShowAP2Modal] = useState(false);
   const [showAGPModal, setShowAGPModal] = useState(false);
   const [showMCPModal, setShowMCPModal] = useState(false);
+  const [showContactSelector, setShowContactSelector] = useState(false);
+  const [showDraftPreview, setShowDraftPreview] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
 
-  // Simulation effect
-  useEffect(() => {
-    if (!isRunning || currentStep >= demoLogEntries.length) return;
+  // Disambiguation state
+  const [disambiguationData, setDisambiguationData] = useState<{
+    ambiguousName: string;
+    candidates: Contact[];
+  } | null>(null);
 
-    const timer = setTimeout(() => {
-      const entry = demoLogEntries[currentStep];
-      const newEntry: LogEntry = {
-        ...entry,
-        id: `log-${Date.now()}`,
+  // Add workflow step helper
+  const addWorkflowStep = useCallback((step: Omit<WorkflowStep, "id" | "timestamp">) => {
+    const newStep: WorkflowStep = {
+      ...step,
+      id: `step-${Date.now()}`,
+      timestamp: new Date(),
+    };
+    setWorkflowSteps(prev => [...prev, newStep]);
+
+    // Also add to protocol log
+    const logEntry: LogEntry = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date(),
+      protocol: step.protocol,
+      message: step.action,
+      status: step.status === "complete" ? "complete" : 
+              step.status === "error" ? "alert" :
+              step.status === "interrupted" ? "alert" : "active",
+      details: step.details,
+    };
+    setLogEntries(prev => [logEntry, ...prev]);
+    setActiveProtocol(step.protocol);
+  }, []);
+
+  // Update workflow step
+  const updateWorkflowStep = useCallback((stepId: string, updates: Partial<WorkflowStep>) => {
+    setWorkflowSteps(prev => prev.map(step => 
+      step.id === stepId ? { ...step, ...updates } : step
+    ));
+  }, []);
+
+  // Process email workflow
+  const processEmailWorkflow = useCallback(async (intent: ParsedIntent) => {
+    setCurrentIntent(intent);
+    setIsRunning(true);
+
+    // Step 1: Contact discovery
+    if (intent.recipients && intent.recipients.length > 0) {
+      addWorkflowStep({
+        protocol: "MCP",
+        action: "Querying contact database...",
+        status: "active",
+      });
+
+      // Search for each recipient
+      for (const recipient of intent.recipients) {
+        const contacts = await EmailAgentService.searchContacts(recipient);
+        
+        if (contacts.length === 0) {
+          // No contacts found - might be a direct email
+          if (recipient.includes("@")) {
+            setResolvedRecipients(prev => [...prev, {
+              id: `direct-${Date.now()}`,
+              name: recipient.split("@")[0],
+              email: recipient,
+              source: "Direct",
+            }]);
+          } else {
+            toast.error(`No contact found for "${recipient}"`);
+          }
+        } else if (contacts.length === 1) {
+          // Single match
+          setResolvedRecipients(prev => [...prev, contacts[0]]);
+          addWorkflowStep({
+            protocol: "MCP",
+            action: `Resolved: ${contacts[0].name} (${contacts[0].email})`,
+            status: "complete",
+          });
+        } else {
+          // Multiple matches - need disambiguation
+          addWorkflowStep({
+            protocol: "A2A",
+            action: `Disambiguation required for "${recipient}"`,
+            status: "interrupted",
+            details: `${contacts.length} contacts found`,
+          });
+          
+          setPendingRecipients(intent.recipients.filter(r => r !== recipient));
+          setDisambiguationData({
+            ambiguousName: recipient,
+            candidates: contacts,
+          });
+          setShowContactSelector(true);
+          setIsRunning(false);
+          return; // Pause workflow for user input
+        }
+      }
+    }
+
+    // Step 2: Generate draft
+    await generateDraftFromIntent(intent);
+  }, [addWorkflowStep]);
+
+  // Generate draft from intent
+  const generateDraftFromIntent = async (intent: ParsedIntent) => {
+    addWorkflowStep({
+      protocol: "A2A",
+      action: "Generating email draft with Writer Agent...",
+      status: "active",
+    });
+
+    try {
+      const conversationHistory = messages.map(m => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+
+      const draft = await EmailAgentService.generateDraft(conversationHistory, {
+        userProfile: defaultUserProfile,
+        resolvedRecipients,
+      });
+
+      // Add signature from user profile
+      draft.signature = `Best regards,\n${defaultUserProfile.name}\n${defaultUserProfile.designation || ""}\n${defaultUserProfile.company || ""}`;
+      draft.to = resolvedRecipients.map(r => r.email);
+
+      setCurrentDraft(draft);
+      
+      addWorkflowStep({
+        protocol: "A2A",
+        action: "Email draft generated",
+        status: "complete",
+      });
+
+      // Show draft preview
+      setShowDraftPreview(true);
+      setIsRunning(false);
+
+      // Add assistant message
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `I've drafted your email to ${resolvedRecipients.map(r => r.name).join(" and ")}. Please review the draft and let me know if you'd like any changes.`,
         timestamp: new Date(),
       };
+      setMessages(prev => [...prev, assistantMessage]);
 
-      setLogEntries(prev => [newEntry, ...prev]);
-      setActiveProtocol(entry.protocol);
+    } catch (error) {
+      console.error("Draft generation error:", error);
+      addWorkflowStep({
+        protocol: "A2A",
+        action: "Failed to generate draft",
+        status: "error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
+      toast.error("Failed to generate email draft");
+      setIsProcessing(false);
+      setIsRunning(false);
+    }
+  };
 
-      // Update agent states based on protocol
-      if (entry.protocol === "A2A") {
-        setConnections(prev => prev.map(c => 
-          c.id === "c1" ? { ...c, active: true } : c
-        ));
-        setAgents(prev => prev.map(a => 
-          a.id === "research" ? { ...a, status: "processing" } : a
-        ));
-      }
+  // Handle contact selection from disambiguation
+  const handleContactSelected = async (contact: Contact) => {
+    setShowContactSelector(false);
+    setResolvedRecipients(prev => [...prev, contact]);
+    
+    addWorkflowStep({
+      protocol: "A2A",
+      action: `User selected: ${contact.name} (${contact.email})`,
+      status: "complete",
+    });
 
-      if (entry.protocol === "MCP") {
-        setConnections(prev => prev.map(c => 
-          c.id === "c3" ? { ...c, active: true } : c
-        ));
-        setAgents(prev => prev.map(a => 
-          a.id === "database" ? { ...a, status: "active" } : a
-        ));
-      }
+    // Continue with remaining recipients
+    if (pendingRecipients.length > 0 && currentIntent) {
+      processEmailWorkflow({
+        ...currentIntent,
+        recipients: pendingRecipients,
+      });
+    } else if (currentIntent) {
+      // All recipients resolved, generate draft
+      await generateDraftFromIntent(currentIntent);
+    }
+  };
 
-      if (entry.protocol === "AGP" && entry.status === "alert") {
-        setShowAGPModal(true);
+  // Handle email refinement
+  const handleRefineDraft = async (feedback: string) => {
+    if (!currentDraft) return;
+    
+    setIsRefining(true);
+    addWorkflowStep({
+      protocol: "A2A",
+      action: `Refining draft: "${feedback.slice(0, 50)}..."`,
+      status: "active",
+    });
+
+    try {
+      const conversationHistory = messages.map(m => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+
+      const result = await EmailAgentService.refineDraft(feedback, conversationHistory, {
+        userProfile: defaultUserProfile,
+        currentDraft,
+        resolvedRecipients,
+      });
+
+      result.draft.signature = currentDraft.signature;
+      result.draft.to = currentDraft.to;
+      setCurrentDraft(result.draft);
+
+      addWorkflowStep({
+        protocol: "A2A",
+        action: `Draft refined: ${result.changes.join(", ")}`,
+        status: "complete",
+      });
+
+      toast.success("Draft updated!");
+    } catch (error) {
+      console.error("Refinement error:", error);
+      toast.error("Failed to refine draft");
+      addWorkflowStep({
+        protocol: "A2A",
+        action: "Failed to refine draft",
+        status: "error",
+      });
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  // Handle email send
+  const handleSendEmail = async (draft: EmailDraft) => {
+    setShowDraftPreview(false);
+    
+    addWorkflowStep({
+      protocol: "AGP",
+      action: "Sending email via Gmail API...",
+      status: "active",
+    });
+
+    // In production, this would call Gmail MCP
+    // For now, simulate success
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    addWorkflowStep({
+      protocol: "AGP",
+      action: "Email sent successfully!",
+      status: "complete",
+      details: `To: ${draft.to.join(", ")}`,
+    });
+
+    toast.success("Email sent successfully!");
+
+    const assistantMessage: Message = {
+      id: Date.now().toString(),
+      role: "assistant",
+      content: `✅ Email sent successfully to ${draft.to.join(", ")}!\n\nSubject: ${draft.subject}`,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, assistantMessage]);
+    setIsRunning(false);
+  };
+
+  // Main send handler
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    if (isListening) stopListening();
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput("");
+    setIsProcessing(true);
+    setIsRunning(true);
+
+    // Add initial workflow step
+    addWorkflowStep({
+      protocol: "ANS",
+      action: "Parsing user intent...",
+      status: "active",
+    });
+
+    try {
+      // Parse intent
+      const intent = await EmailAgentService.parseIntent(input, {
+        userProfile: defaultUserProfile,
+      });
+
+      addWorkflowStep({
+        protocol: "ANS",
+        action: `Intent detected: ${intent.action}`,
+        status: "complete",
+        details: intent.recipients?.length ? `Recipients: ${intent.recipients.join(", ")}` : undefined,
+      });
+
+      if (intent.action === "DRAFT_EMAIL" || intent.action === "REPLY_EMAIL") {
+        // Clear previous state
+        setResolvedRecipients([]);
+        await processEmailWorkflow(intent);
+      } else {
+        // General chat
+        addWorkflowStep({
+          protocol: "A2A",
+          action: "Processing with AI agent...",
+          status: "active",
+        });
+
+        const conversationHistory = [...messages, userMessage].map(m => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        }));
+
+        const response = await EmailAgentService.chat(conversationHistory, {
+          userProfile: defaultUserProfile,
+        });
+
+        addWorkflowStep({
+          protocol: "A2A",
+          action: "Response generated",
+          status: "complete",
+        });
+
+        const assistantMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: response.message,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, assistantMessage]);
         setIsRunning(false);
       }
+    } catch (error) {
+      console.error("Processing error:", error);
+      
+      addWorkflowStep({
+        protocol: "ANS",
+        action: "Error processing request",
+        status: "error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
 
-      if (entry.protocol === "AP2" && entry.status === "alert") {
-        setShowAP2Modal(true);
-        setIsRunning(false);
-      }
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `I apologize, but I encountered an error: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      toast.error("Failed to process request");
+      setIsRunning(false);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-      setCurrentStep(prev => prev + 1);
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [isRunning, currentStep]);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   const handleReset = () => {
     setIsRunning(false);
@@ -150,7 +475,12 @@ export const CommandCenter = () => {
     setAgents(initialAgents);
     setConnections(initialConnections);
     setActiveProtocol(null);
-    setCurrentStep(0);
+    setWorkflowSteps([]);
+    setMessages([]);
+    setCurrentIntent(null);
+    setCurrentDraft(null);
+    setResolvedRecipients([]);
+    setPendingRecipients([]);
   };
 
   const handleAGPAllow = () => {
@@ -177,44 +507,6 @@ export const CommandCenter = () => {
     setIsRunning(true);
   };
 
-  // Chat handlers
-  const handleSend = async () => {
-    if (!input.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsProcessing(true);
-    
-    // Start the simulation when user sends a message
-    setIsRunning(true);
-
-    // Simulate AI processing
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "I understand your request. I'll help you automate this task using LLMs and MCPs. Check the Task Execution Log on the right to see the workflow progress.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsProcessing(false);
-    }, 2000);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Main Content */}
@@ -225,11 +517,11 @@ export const CommandCenter = () => {
           <div className="border-b border-border/30 px-6 py-3 flex items-center justify-between bg-card/30 backdrop-blur-sm">
             <div>
               <h2 className="text-xl font-semibold">
-                {activeView === "chat" ? "Chat prompt" : "Agent Orchestration Canvas"}
+                {activeView === "chat" ? "Email Agent" : "Agent Orchestration Canvas"}
               </h2>
               <p className="text-sm text-muted-foreground mt-0.5">
                 {activeView === "chat" 
-                  ? "Intelligent automation for optimizing processes" 
+                  ? "Voice-first intelligent email automation" 
                   : "A2A Protocol Visualization"}
               </p>
             </div>
@@ -329,11 +621,24 @@ export const CommandCenter = () => {
                         <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 flex items-center justify-center">
                           <Send className="w-10 h-10 text-primary" />
                         </div>
-                        <h3 className="text-2xl font-bold text-foreground">Start a conversation</h3>
+                        <h3 className="text-2xl font-bold text-foreground">Intelligent Email Agent</h3>
                         <p className="text-muted-foreground leading-relaxed">
-                          Type your request below to automate tasks with AI-powered agents.
-                          For example: "Draft a mail to xyz@gmail.com on updating their Jira Status for PROJ-1234"
+                          Use voice or text to draft, review, and send emails. Try: 
+                          <span className="block mt-2 text-primary font-medium">
+                            "Draft an email to John and Priya about the project meeting"
+                          </span>
                         </p>
+                        <div className="flex flex-wrap justify-center gap-2 mt-4">
+                          <span className="px-3 py-1 rounded-full bg-muted text-xs text-muted-foreground">
+                            Voice Commands
+                          </span>
+                          <span className="px-3 py-1 rounded-full bg-muted text-xs text-muted-foreground">
+                            Smart Disambiguation
+                          </span>
+                          <span className="px-3 py-1 rounded-full bg-muted text-xs text-muted-foreground">
+                            Draft Refinement
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -370,7 +675,7 @@ export const CommandCenter = () => {
                     <Card className="p-4 bg-muted/30 max-w-[80%]">
                       <div className="flex items-center gap-3">
                         <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                        <span className="text-sm text-muted-foreground">Processing...</span>
+                        <span className="text-sm text-muted-foreground">Processing your request...</span>
                       </div>
                     </Card>
                   )}
@@ -415,9 +720,7 @@ export const CommandCenter = () => {
                   <div className="flex gap-3 items-end">
                     {/* Voice Input Button */}
                     {isVoiceSupported && (
-                      <motion.div
-                        whileTap={{ scale: 0.95 }}
-                      >
+                      <motion.div whileTap={{ scale: 0.95 }}>
                         <Button
                           variant={isListening ? "default" : "outline"}
                           size="lg"
@@ -448,7 +751,7 @@ export const CommandCenter = () => {
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder={isListening ? "Speak now..." : "Draft a mail to xyz@gmail.com on updating their Jira Status for PROJ-1234"}
+                      placeholder={isListening ? "Speak now..." : "Draft an email to John about the project meeting..."}
                       className="min-h-[60px] max-h-[120px] resize-none bg-muted/50 border-border/50 focus:border-primary transition-colors"
                     />
                     <Button
@@ -486,13 +789,18 @@ export const CommandCenter = () => {
 
         {/* Right Panel - Task Execution Log or Protocol Log (only show after query execution) */}
         {(activeView === "canvas" || messages.length > 0) && (
-          <div className="w-[380px] min-w-[320px] flex flex-col">
+          <motion.div 
+            className="w-[380px] min-w-[320px] flex flex-col"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+          >
             {activeView === "chat" ? (
               <WorkflowLog />
             ) : (
               <ProtocolLog entries={logEntries} activeProtocol={activeProtocol} />
             )}
-          </div>
+          </motion.div>
         )}
       </div>
 
@@ -525,6 +833,32 @@ export const CommandCenter = () => {
           console.log("Installed MCP item:", itemId);
         }}
       />
+
+      {/* Contact Selector for Disambiguation */}
+      {disambiguationData && (
+        <ContactSelectorModal
+          isOpen={showContactSelector}
+          onClose={() => {
+            setShowContactSelector(false);
+            setDisambiguationData(null);
+          }}
+          onSelect={handleContactSelected}
+          ambiguousName={disambiguationData.ambiguousName}
+          candidates={disambiguationData.candidates}
+        />
+      )}
+
+      {/* Email Draft Preview */}
+      {currentDraft && (
+        <EmailDraftPreviewModal
+          isOpen={showDraftPreview}
+          onClose={() => setShowDraftPreview(false)}
+          onSend={handleSendEmail}
+          onRefine={handleRefineDraft}
+          draft={currentDraft}
+          isRefining={isRefining}
+        />
+      )}
     </div>
   );
 };
