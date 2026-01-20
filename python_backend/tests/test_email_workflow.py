@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock, patch
 from app.services.smart_parser import analyze_incoming_email
 from app.workflows.email_engine import EmailWorkflow, WorkflowState
 
@@ -21,18 +22,37 @@ def test_smart_parser_normal_email():
     assert result["is_noreply"] is False
     assert result["alternative_email"] is None
 
-def test_workflow_ambiguity():
+@patch("app.workflows.email_engine.GoogleContactsService")
+def test_workflow_ambiguity(MockGoogleService):
+    # Mock the service instance and search method
+    mock_service_instance = MockGoogleService.return_value
+    mock_service_instance.search_contacts.return_value = [
+        {"id": "1", "name": "John Doe", "email": "john.doe@example.com"},
+        {"id": "2", "name": "John Smith", "email": "john.smith@example.com"}
+    ]
+
     workflow = EmailWorkflow("test-id")
     # "John" matches multiple mock contacts
     result = workflow.start_workflow("Send email to John")
 
     assert workflow.state == WorkflowState.AWAITING_SELECTION
     assert result["type"] == "INTERRUPT"
-    assert len(result["data"]) > 1
+    assert len(result["data"]) == 2
 
-def test_workflow_resume_and_draft():
+@patch("app.workflows.email_engine.GoogleContactsService")
+def test_workflow_resume_and_draft(MockGoogleService):
+    # Mock multiple results to force the workflow into AWAITING_SELECTION state
+    mock_service_instance = MockGoogleService.return_value
+    mock_service_instance.search_contacts.return_value = [
+         {"id": "1", "name": "John Doe", "email": "john.doe@example.com"},
+         {"id": "2", "name": "John Smith", "email": "john.smith@example.com"}
+    ]
+
     workflow = EmailWorkflow("test-id")
-    workflow.start_workflow("Send email to John")
+    start_result = workflow.start_workflow("Send email to John")
+
+    assert start_result["type"] == "INTERRUPT"
+    assert workflow.state == WorkflowState.AWAITING_SELECTION
 
     # Simulate selection
     selection = {"id": "1", "name": "John Doe", "email": "john.doe@example.com"}

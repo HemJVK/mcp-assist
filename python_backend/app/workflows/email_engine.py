@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Dict, Optional, Any
 import uuid
 from app.config import get_settings
+from app.services.google_contacts import GoogleContactsService
 
 class WorkflowState(str, Enum):
     IDLE = "IDLE"
@@ -22,30 +23,13 @@ class MockUserProfile:
     def get_profile(self) -> Dict:
         return self.profile
 
-class MockContactsDatabase:
-    def __init__(self):
-        self.contacts = [
-            {"id": "1", "name": "John Doe", "email": "john.doe@example.com", "role": "Professor"},
-            {"id": "2", "name": "John Smith", "email": "john.smith@example.com", "role": "Admin"},
-            {"id": "3", "name": "Alice Johnson", "email": "alice@example.com", "role": "TA"},
-        ]
-        self.settings = get_settings()
-
-    def search(self, name: str) -> List[Dict]:
-        # Placeholder: If Google API were integrated, we would use self.settings.google_client_secret here
-        # to authenticate and search real contacts.
-        # if self.settings.google_client_id:
-        #     pass # Real implementation would go here
-
-        return [c for c in self.contacts if name.lower() in c["name"].lower()]
-
 class EmailWorkflow:
     def __init__(self, workflow_id: str):
         self.id = workflow_id
         self.state = WorkflowState.IDLE
         self.context = {}
         self.draft = ""
-        self.contacts_db = MockContactsDatabase()
+        self.contacts_service = GoogleContactsService()
         self.user_profile = MockUserProfile()
         self.settings = get_settings()
 
@@ -58,7 +42,16 @@ class EmailWorkflow:
         return self.resolve_contact(name)
 
     def resolve_contact(self, name: str):
-        results = self.contacts_db.search(name)
+        results = self.contacts_service.search_contacts(name)
+
+        # Fallback for testing/offline if no google creds: return a mock if service returns empty
+        # This preserves the functionality of the POC if credentials are missing
+        if not results and not self.settings.google_client_id:
+             # Just for fail-safe demo purposes
+             results = [
+                 {"id": "mock1", "name": f"{name} Doe", "email": f"{name}@example.com", "role": "Mock"}
+             ]
+
         if len(results) > 1:
             self.state = WorkflowState.AWAITING_SELECTION
             return {
