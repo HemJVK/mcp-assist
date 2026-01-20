@@ -26,7 +26,7 @@ import { AgentCanvas, AgentNode, Connection } from "./AgentCanvas";
 import { AP2MandateModal, AGPInterceptModal, MCPMarketplaceModal } from "./HITLModals";
 import { ContactSelectorModal } from "./ContactSelectorModal";
 import { EmailDraftPreviewModal } from "./EmailDraftPreviewModal";
-import { WorkflowLog } from "@/components/WorkflowLog";
+import { WorkflowLog, WorkflowLogEntry } from "@/components/WorkflowLog";
 import { toast } from "sonner";
 import * as EmailAgentService from "@/services/email-agent";
 import type { 
@@ -78,6 +78,7 @@ export const CommandCenter = () => {
 
   // Workflow states
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([]);
+  const [workflowLogs, setWorkflowLogs] = useState<WorkflowLogEntry[]>([]);
   const [currentIntent, setCurrentIntent] = useState<ParsedIntent | null>(null);
   const [currentDraft, setCurrentDraft] = useState<EmailDraft | null>(null);
   const [resolvedRecipients, setResolvedRecipients] = useState<Contact[]>([]);
@@ -111,6 +112,18 @@ export const CommandCenter = () => {
     candidates: Contact[];
   } | null>(null);
 
+  // Helper to map protocol to icon type
+  const getIconForProtocol = (protocol: ProtocolType): WorkflowLogEntry["icon"] => {
+    switch (protocol) {
+      case "ANS": return "user";
+      case "A2A": return "ai";
+      case "MCP": return "system";
+      case "AGP": return "mail";
+      case "AP2": return "system";
+      default: return "system";
+    }
+  };
+
   // Add workflow step helper
   const addWorkflowStep = useCallback((step: Omit<WorkflowStep, "id" | "timestamp">) => {
     const newStep: WorkflowStep = {
@@ -119,6 +132,19 @@ export const CommandCenter = () => {
       timestamp: new Date(),
     };
     setWorkflowSteps(prev => [...prev, newStep]);
+
+    // Add to workflow log (real-time task execution log)
+    const workflowLogEntry: WorkflowLogEntry = {
+      id: `wlog-${Date.now()}`,
+      timestamp: new Date(),
+      message: step.action,
+      status: step.status === "complete" ? "completed" : 
+              step.status === "error" ? "error" :
+              step.status === "interrupted" ? "pending" : "processing",
+      icon: getIconForProtocol(step.protocol),
+      details: step.details,
+    };
+    setWorkflowLogs(prev => [...prev, workflowLogEntry]);
 
     // Also add to protocol log
     const logEntry: LogEntry = {
@@ -133,6 +159,20 @@ export const CommandCenter = () => {
     };
     setLogEntries(prev => [logEntry, ...prev]);
     setActiveProtocol(step.protocol);
+  }, []);
+
+  // Update the last workflow log entry status
+  const updateLastWorkflowLog = useCallback((status: WorkflowLogEntry["status"], message?: string) => {
+    setWorkflowLogs(prev => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      updated[updated.length - 1] = {
+        ...updated[updated.length - 1],
+        status,
+        ...(message && { message }),
+      };
+      return updated;
+    });
   }, []);
 
   // Update workflow step
@@ -476,6 +516,7 @@ export const CommandCenter = () => {
     setConnections(initialConnections);
     setActiveProtocol(null);
     setWorkflowSteps([]);
+    setWorkflowLogs([]);
     setMessages([]);
     setCurrentIntent(null);
     setCurrentDraft(null);
@@ -796,7 +837,7 @@ export const CommandCenter = () => {
             transition={{ delay: 0.2 }}
           >
             {activeView === "chat" ? (
-              <WorkflowLog />
+              <WorkflowLog logs={workflowLogs} />
             ) : (
               <ProtocolLog entries={logEntries} activeProtocol={activeProtocol} />
             )}
