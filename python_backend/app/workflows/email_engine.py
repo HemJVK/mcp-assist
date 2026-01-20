@@ -3,6 +3,7 @@ from typing import List, Dict, Optional, Any
 import uuid
 from app.config import get_settings
 from app.services.google_contacts import GoogleContactsService
+from app.services.user_profile import UserProfileService
 
 class WorkflowState(str, Enum):
     IDLE = "IDLE"
@@ -12,17 +13,6 @@ class WorkflowState(str, Enum):
     AWAITING_REVIEW = "AWAITING_REVIEW"
     EXECUTING = "EXECUTING"
 
-class MockUserProfile:
-    def __init__(self):
-        self.profile = {
-            "name": "Hem",
-            "phone": "+91-9999999999",
-            "role": "Student"
-        }
-
-    def get_profile(self) -> Dict:
-        return self.profile
-
 class EmailWorkflow:
     def __init__(self, workflow_id: str):
         self.id = workflow_id
@@ -30,7 +20,7 @@ class EmailWorkflow:
         self.context = {}
         self.draft = ""
         self.contacts_service = GoogleContactsService()
-        self.user_profile = MockUserProfile()
+        self.user_profile = UserProfileService()
         self.settings = get_settings()
 
     def start_workflow(self, initial_instruction: str):
@@ -43,14 +33,6 @@ class EmailWorkflow:
 
     def resolve_contact(self, name: str):
         results = self.contacts_service.search_contacts(name)
-
-        # Fallback for testing/offline if no google creds: return a mock if service returns empty
-        # This preserves the functionality of the POC if credentials are missing
-        if not results and not self.settings.google_client_id:
-             # Just for fail-safe demo purposes
-             results = [
-                 {"id": "mock1", "name": f"{name} Doe", "email": f"{name}@example.com", "role": "Mock"}
-             ]
 
         if len(results) > 1:
             self.state = WorkflowState.AWAITING_SELECTION
