@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Any
 import uuid
+from app.config import get_settings
 
 class WorkflowState(str, Enum):
     IDLE = "IDLE"
@@ -28,8 +29,14 @@ class MockContactsDatabase:
             {"id": "2", "name": "John Smith", "email": "john.smith@example.com", "role": "Admin"},
             {"id": "3", "name": "Alice Johnson", "email": "alice@example.com", "role": "TA"},
         ]
+        self.settings = get_settings()
 
     def search(self, name: str) -> List[Dict]:
+        # Placeholder: If Google API were integrated, we would use self.settings.google_client_secret here
+        # to authenticate and search real contacts.
+        # if self.settings.google_client_id:
+        #     pass # Real implementation would go here
+
         return [c for c in self.contacts if name.lower() in c["name"].lower()]
 
 class EmailWorkflow:
@@ -40,6 +47,7 @@ class EmailWorkflow:
         self.draft = ""
         self.contacts_db = MockContactsDatabase()
         self.user_profile = MockUserProfile()
+        self.settings = get_settings()
 
     def start_workflow(self, initial_instruction: str):
         self.state = WorkflowState.RESOLVING_CONTACTS
