@@ -1,33 +1,9 @@
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from app.config import get_settings
+from app.services.google_base import GoogleBaseService
 from typing import List, Dict, Any
 
-class GoogleContactsService:
+class GoogleContactsService(GoogleBaseService):
     def __init__(self):
-        self.settings = get_settings()
-        self.service = None
-        self._authenticate()
-
-    def _authenticate(self):
-        """
-        Authenticates with Google using the refresh token flow.
-        """
-        if not self.settings.google_client_id or not self.settings.google_refresh_token:
-            print("Warning: Google Credentials not set. Google Contacts Service will fail if used.")
-            return
-
-        try:
-            creds = Credentials(
-                None,  # No access token initially
-                refresh_token=self.settings.google_refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=self.settings.google_client_id,
-                client_secret=self.settings.google_client_secret,
-            )
-            self.service = build('people', 'v1', credentials=creds)
-        except Exception as e:
-            print(f"Failed to authenticate with Google: {e}")
+        super().__init__('people', 'v1')
 
     def search_contacts(self, query: str) -> List[Dict[str, Any]]:
         """

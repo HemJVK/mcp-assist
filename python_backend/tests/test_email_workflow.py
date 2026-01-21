@@ -39,14 +39,19 @@ def test_workflow_ambiguity(MockGoogleService):
     assert result["type"] == "INTERRUPT"
     assert len(result["data"]) == 2
 
+@patch("app.workflows.email_engine.LLMService")
 @patch("app.workflows.email_engine.GoogleContactsService")
-def test_workflow_resume_and_draft(MockGoogleService):
-    # Mock multiple results to force the workflow into AWAITING_SELECTION state
+def test_workflow_resume_and_draft(MockGoogleService, MockLLMService):
+    # Mock Google Contacts
     mock_service_instance = MockGoogleService.return_value
     mock_service_instance.search_contacts.return_value = [
          {"id": "1", "name": "John Doe", "email": "john.doe@example.com"},
          {"id": "2", "name": "John Smith", "email": "john.smith@example.com"}
     ]
+
+    # Mock LLM
+    mock_llm_instance = MockLLMService.return_value
+    mock_llm_instance.generate_draft.return_value = "Dear John Doe,\n\nTest Draft.\n\nBest,\nHem"
 
     workflow = EmailWorkflow("test-id")
     start_result = workflow.start_workflow("Send email to John")
@@ -59,26 +64,39 @@ def test_workflow_resume_and_draft(MockGoogleService):
     result = workflow.resume(selection)
 
     assert workflow.state == WorkflowState.AWAITING_REVIEW
-    assert "Dear John Doe" in result["draft"]
-    # Check signature injection
-    assert "Hem" in result["draft"]
-    assert "Student" in result["draft"]
+    assert "Test Draft" in result["draft"]
+    # LLM mock returns the draft, so we assert on that
 
-def test_workflow_refine():
+@patch("app.workflows.email_engine.LLMService")
+def test_workflow_refine(MockLLMService):
     workflow = EmailWorkflow("test-id")
     workflow.context["recipient"] = {"name": "Test User"}
+
+    # Setup Mock
+    mock_llm_instance = MockLLMService.return_value
+    mock_llm_instance.generate_draft.return_value = "Original Draft"
+    mock_llm_instance.refine_draft.return_value = "Refined Draft"
+
     workflow.draft_email() # Move to AWAITING_REVIEW
 
-    initial_draft = workflow.draft
     result = workflow.refine_draft("Make it more professional")
 
     assert result["state"] == WorkflowState.AWAITING_REVIEW
-    assert "Refined based on" in result["draft"]
-    assert len(result["draft"]) > len(initial_draft)
+    assert result["draft"] == "Refined Draft"
 
-def test_workflow_send():
+@patch("app.workflows.email_engine.GmailService")
+@patch("app.workflows.email_engine.LLMService")
+def test_workflow_send(MockLLMService, MockGmailService):
     workflow = EmailWorkflow("test-id")
-    workflow.context["recipient"] = {"name": "Test User"}
+    workflow.context["recipient"] = {"name": "Test User", "email": "test@example.com"}
+
+    # Setup Mocks
+    mock_llm_instance = MockLLMService.return_value
+    mock_llm_instance.generate_draft.return_value = "Draft Body"
+
+    mock_gmail_instance = MockGmailService.return_value
+    mock_gmail_instance.send_email.return_value = {"status": "SENT", "message_id": "123"}
+
     workflow.draft_email()
 
     result = workflow.send_email()

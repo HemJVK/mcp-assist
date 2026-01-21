@@ -4,6 +4,8 @@ import uuid
 from app.config import get_settings
 from app.services.google_contacts import GoogleContactsService
 from app.services.user_profile import UserProfileService
+from app.services.gmail_service import GmailService
+from app.services.llm_service import LLMService
 
 class WorkflowState(str, Enum):
     IDLE = "IDLE"
@@ -20,6 +22,8 @@ class EmailWorkflow:
         self.context = {}
         self.draft = ""
         self.contacts_service = GoogleContactsService()
+        self.gmail_service = GmailService()
+        self.llm_service = LLMService()
         self.user_profile = UserProfileService()
         self.settings = get_settings()
 
@@ -29,6 +33,7 @@ class EmailWorkflow:
         # For POC, assuming input is like "Send email to John" or just "John"
         name = initial_instruction.replace("Send email to ", "").strip()
         self.context["target_name"] = name
+        self.context["initial_instruction"] = initial_instruction
         return self.resolve_contact(name)
 
     def resolve_contact(self, name: str):
@@ -63,9 +68,14 @@ class EmailWorkflow:
         recipient = self.context.get("recipient", {})
         recipient_name = recipient.get("name", "there")
         user_profile = self.user_profile.get_profile()
+        instruction = self.context.get("initial_instruction", "General update")
 
-        # Mock LLM generation
-        body = f"Dear {recipient_name},\n\nI hope this email finds you well.\n\n[Content Placeholder based on intent]\n\nBest regards,\n{user_profile['name']}\n{user_profile['role']}\n{user_profile['phone']}"
+        # Real LLM generation
+        body = self.llm_service.generate_draft(
+            recipient_name=recipient_name,
+            sender_profile=user_profile,
+            context_instruction=instruction
+        )
 
         self.draft = body
         self.state = WorkflowState.AWAITING_REVIEW
@@ -79,8 +89,8 @@ class EmailWorkflow:
         if self.state != WorkflowState.AWAITING_REVIEW:
              return {"error": "Cannot refine draft in current state"}
 
-        # Mock LLM refinement
-        self.draft = f"[Refined based on: '{instruction}']\n" + self.draft
+        # Real LLM refinement
+        self.draft = self.llm_service.refine_draft(self.draft, instruction)
         return {
             "state": self.state,
             "draft": self.draft
@@ -91,9 +101,19 @@ class EmailWorkflow:
             return {"error": "Cannot send email in current state"}
 
         self.state = WorkflowState.EXECUTING
-        # Mock sending
+
+        recipient = self.context.get("recipient", {})
+        to_email = recipient.get("email")
+
+        if not to_email:
+            self.state = WorkflowState.AWAITING_REVIEW
+            return {"error": "Recipient email not found"}
+
+        # Extract subject from draft or use default
+        subject = "Update from " + self.user_profile.get_profile()["name"]
+
+        # Real Sending via Gmail API
+        result = self.gmail_service.send_email(to_email, subject, self.draft)
+
         self.state = WorkflowState.IDLE
-        return {
-            "status": "SENT",
-            "message": "Email sent successfully"
-        }
+        return result

@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     google_project_id: str = ""
     google_refresh_token: str = ""
 
+    # OpenAI
+    openai_api_key: str = ""
+
     # Optional: Path to credentials file if using service account
     google_application_credentials: str = ""
 
